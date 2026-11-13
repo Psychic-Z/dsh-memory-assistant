@@ -1,0 +1,13 @@
+# memory-assistant bundle patch — 把插件插进 DSH profile 的插件树。
+#
+# name 必须等于 package.json 里的包名。
+- insert:
+    - id: memory-assistant
+      name: '@local/dsh-memory-assistant'
+      config:
+        # 卡片库位置（默认 ~/.dsh-memory-assistant）
+        dataDir: ''
+        # 每次检索返回几条
+        topK: 3
+        # 是否在每轮开始提示可用（默认关，先用技能触发）
+        hintEnabled: false

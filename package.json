@@ -1,0 +1,63 @@
+{
+  "name": "@local/dsh-memory-assistant",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "记忆助理：把对话整理成记忆卡片，用关键词检索定位；找不到或不确定时会追问，不编。",
+  "main": "index.js",
+  "bin": {
+    "mem": "./bin/mem.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "bin/",
+    "lib/",
+    "skills/",
+    "cordis.patch.yml",
+    "client.js",
+    "README.md",
+    "LICENSE",
+    "icon.png",
+    "icon-256.png",
+    "icon-180.png"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": ">=0.2.2-rc.1 <0.3.0"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    },
+    "manifestVersion": 1
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "memory",
+    "memory-assistant",
+    "回忆",
+    "记忆"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OWNER/dsh-memory-assistant"
+  },
+  "homepage": "https://github.com/OWNER/dsh-memory-assistant#readme",
+  "author": "OWNER"
+}

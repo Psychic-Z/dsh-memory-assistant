@@ -1,0 +1,13 @@
+node_modules/
+
+# 本地数据与导入产物：含用户对话内容，绝不入库
+data/
+data_*/
+import/
+export/
+_t*/
+_u*/
+
+# 打包/缓存产物
+*.tgz
+.npm-cache/
