@@ -22,6 +22,10 @@ function arg(name, def) {
 
 const cmd = process.argv[2]
 
+// 卡片归属：谁写的、跑在哪个平台。跨 agent 共享时靠它标出处（见 42 §8）
+const OWNER = String(arg('owner', 'deepseek-harness'))
+const PLATFORM = String(arg('platform', 'dsh'))
+
 function readUnits(from) {
   const md = fs.readFileSync(from, 'utf8')
   const lines = md.split('\n')
@@ -223,6 +227,8 @@ if (cmd === 'merge') {
           kind: c.kind || 'fact',
           status: 'active',
           source: 'import',
+          owner: OWNER,
+          platform: PLATFORM,
         }) + '\n'
       )
       ok++
