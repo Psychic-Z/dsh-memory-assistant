@@ -529,7 +529,7 @@ window.__ModuleLoader__.load({
         { className: "ma-wrap" },
         // 样式挂在面板自己身上：不管宿主把面板渲染在 document 还是 shadow root 里都吃得到
         el("style", null, CSS),
-        el("div", { className: "ma-head" }, el("span", { className: "ma-title" }, "记忆助理"), el("span", { className: "ma-ver" }, "v0.2.1")),
+        el("div", { className: "ma-head" }, el("span", { className: "ma-title" }, "记忆助理"), el("span", { className: "ma-ver" }, "v0.2.2")),
         el("div", { className: "ma-sub" }, "将对话整理成记忆卡片，用关键词检索定位。如果没找到或者不确定，会追问。"),
         importBlock,
         el(
