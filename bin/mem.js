@@ -223,6 +223,7 @@ if (cmd === 'init') {
         mismatch: !!(st.polarityMismatch && scored.some((s) => st.polarityMismatch.has(s.card.key))),
         note: st.qNeg ? '问句是否定，但库里只有肯定记录；别把命中当「没发生过」' : '',
       },
+      exclusion: st.exclusion || [],
       results: scored.map((s) => ({
         key: s.card.key,
         score: s.score,
@@ -250,6 +251,7 @@ if (cmd === 'init') {
       out(`【没有】${scopeWord}没有这块记忆：「${brief(st.absent.length ? st.absent : st.terms) || '问句里没有可检索的名词'}」一个都没出现过`)
       out('  空手追问，别硬答')
     }
+    if (st.exclusion && st.exclusion.length) out(`（已按「除了…」把你排除的「${st.exclusion.join('/')}」移出检索目标）`)
     if (scored.length) {
       if (tie) out('（并列：拿不准就问）')
       // 极性提醒：问句是否定、命中卡是肯定 → 库里只有「做过」的记录，别把它当「没做过」的证据
