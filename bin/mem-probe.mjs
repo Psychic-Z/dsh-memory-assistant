@@ -128,6 +128,24 @@ for (const p of PROBES) {
 }
 
 const rate = (k, which = 'hit') => rows.filter((r) => r[k][which]).length
+
+// ── 极性回归：否定问句必须被标注出来（哪怕结果照给）──────────────
+const NEG_PROBES = [
+  { q: '公告板 没删', forbid: ['w:0086'] },
+  { q: '背景图 没删', forbid: ['w:0112'] },
+  { q: '打码 没卡住', forbid: ['w:0739', 'w:0760'] },
+  { q: '建表 没出错', forbid: ['w:0710'], expectFlag: false }, // 命中的卡本身带「无」，不该误报冲突
+  { q: '打码 还没做完', forbid: [] },
+  { q: '这个项目 还没开始', forbid: ['w:0643', 'w:0644'] },
+]
+const negRows = NEG_PROBES.map((p) => {
+  const out = runNew(cards, p.q, statsNew)
+  const top = out.top ? out.top.key : null
+  const flagged = !!(out.st && out.st.qNeg && top && out.st.polarityMismatch && out.st.polarityMismatch.has(top))
+  return { ...p, top, flagged, state: out.state }
+})
+const negPass = negRows.filter((r) => r.flagged === (r.expectFlag !== false)).length
+
 const isJson = process.argv.includes('--json')
 if (isJson) {
   console.log(
@@ -136,6 +154,7 @@ if (isJson) {
         probes: rows.length,
         hit1: { A: rate('A'), B: rate('B'), C: rate('C') },
         hit3: { A: rate('A', 'hit3'), B: rate('B', 'hit3'), C: rate('C', 'hit3') },
+        polarity: { total: negRows.length, flagged: negPass, rows: negRows },
         rows,
       },
       null,
@@ -150,9 +169,16 @@ if (isJson) {
   process.stdout.write(`探针回放（${rows.length} 道：${PROBES.filter((p) => p.accept).length} 道有答案 + ${PROBES.filter((p) => !p.accept).length} 道库里没有）\n\n`)
   process.stdout.write(
     `命中@1：A 打码前+旧 ${rate('A')}/${rows.length}　B 打码后+旧 ${rate('B')}/${rows.length}　C 打码后+新+三态 ${rate('C')}/${rows.length}\n` +
-      `命中@3：A ${rate('A', 'hit3')}/${rows.length}　B ${rate('B', 'hit3')}/${rows.length}　C ${rate('C', 'hit3')}/${rows.length}\n\n`,
+      `命中@3：A ${rate('A', 'hit3')}/${rows.length}　B ${rate('B', 'hit3')}/${rows.length}　C ${rate('C', 'hit3')}/${rows.length}\n` +
+      `极性标注：${negPass}/${negRows.length}（否定问句里，被标出「库里记的是肯定」的句数）\n\n`,
   )
   process.stdout.write('题目 | A 打码前+旧 | B 打码后+旧 | C 打码后+新\n')
   for (const r of rows) process.stdout.write(line(r) + '\n')
+  process.stdout.write('\n否定问句（只要求被标注，不要求改答案）：\n')
+  for (const r of negRows) {
+    const want = r.expectFlag !== false
+    const ok = r.flagged === want
+    process.stdout.write(`  ${ok ? '✓' : '✗'} ${r.q} → ${r.top || '（空）'} [${r.state}]${want ? '' : '（卡本身带否定，不该误报）'}\n`)
+  }
   process.stdout.write('\n（[related]/[none] 是 C 判出的状态；A/B 没有状态，只有分数。「空」= 判成没有这块记忆）\n')
 }
