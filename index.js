@@ -99,7 +99,9 @@ export function apply(ctx, config = {}) {
         // 不等它跑完：tick 只记轮次 + 触发，真正的导入放到下一个事件循环
         await autoImport.tick({ ...(payload || {}), agent: sid ? { id: sid } : undefined })
       } catch (_) {}
-      return next()
+      // agent/turn-stopping 是普通事件，不传 next；只有 waterfall 事件才有。
+      // 无条件 next() 会在每轮结束时抛 "next is not a function"，把整轮判成失败。
+      return typeof next === 'function' ? next() : undefined
     })
   } catch (e) {
     try {
@@ -116,7 +118,7 @@ export function apply(ctx, config = {}) {
       try {
         hint.remember(payload.agent && payload.agent.id, payload.messages, payload.turn)
       } catch (_) {}
-      return next()
+      return typeof next === 'function' ? next() : undefined
     })
   } catch (e) {
     try {
