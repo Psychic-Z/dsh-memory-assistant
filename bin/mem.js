@@ -218,6 +218,11 @@ if (cmd === 'init') {
       terms: { known: st.known, absent: st.absent },
       missing: st.missing,
       gap: Number(gap.toFixed(3)),
+      polarity: {
+        negative: !!st.qNeg,
+        mismatch: !!(st.polarityMismatch && scored.some((s) => st.polarityMismatch.has(s.card.key))),
+        note: st.qNeg ? '问句是否定，但库里只有肯定记录；别把命中当「没发生过」' : '',
+      },
       results: scored.map((s) => ({
         key: s.card.key,
         score: s.score,
@@ -247,6 +252,9 @@ if (cmd === 'init') {
     }
     if (scored.length) {
       if (tie) out('（并列：拿不准就问）')
+      // 极性提醒：问句是否定、命中卡是肯定 → 库里只有「做过」的记录，别把它当「没做过」的证据
+      const negHit = st.polarityMismatch && scored.some((s) => st.polarityMismatch.has(s.card.key))
+      if (negHit) out('⚠ 你问的是否定（没/未/别），但库里记的是肯定的事实；别把这张卡当成「没发生过」的证据，先跟用户确认。')
       for (const [i, s] of scored.entries()) {
         // 精确命中看覆盖，不看分数（分数里含概念码，容易被误读成"越像越对"）
         const tag = state === 'exact' ? `${Math.round(covOf(s) * 100)}%` : s.score
