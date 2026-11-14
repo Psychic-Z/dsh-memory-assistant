@@ -146,6 +146,19 @@ const negRows = NEG_PROBES.map((p) => {
 })
 const negPass = negRows.filter((r) => r.flagged === (r.expectFlag !== false)).length
 
+// ── 数字回归：带数字的问句不能把数字丢掉 ──────────────────────
+const NUM_PROBES = [
+  { q: '512010 为什么出局', accept: ['w:0064'] },
+  { q: '107.73 分母差', accept: ['w:0105'] },
+  { q: 'R-007 每周建议', accept: ['w:0075'] },
+  { q: '33% 权益零余量', accept: ['w:0052'] },
+]
+const numRows = NUM_PROBES.map((p) => {
+  const out = runNew(cards, p.q, statsNew)
+  return { q: p.q, top: out.top?.key || null, ok: !!out.top && p.accept.includes(out.top.key) }
+})
+const numPass = numRows.filter((r) => r.ok).length
+
 const isJson = process.argv.includes('--json')
 if (isJson) {
   console.log(
@@ -170,7 +183,8 @@ if (isJson) {
   process.stdout.write(
     `命中@1：A 打码前+旧 ${rate('A')}/${rows.length}　B 打码后+旧 ${rate('B')}/${rows.length}　C 打码后+新+三态 ${rate('C')}/${rows.length}\n` +
       `命中@3：A ${rate('A', 'hit3')}/${rows.length}　B ${rate('B', 'hit3')}/${rows.length}　C ${rate('C', 'hit3')}/${rows.length}\n` +
-      `极性标注：${negPass}/${negRows.length}（否定问句里，被标出「库里记的是肯定」的句数）\n\n`,
+      `极性标注：${negPass}/${negRows.length}（否定问句里，被标出「库里记的是肯定」的句数）\n` +
+      `数字命中：${numPass}/${numRows.length}（带股票代码/金额/编号的问句，头名是否对）\n\n`,
   )
   process.stdout.write('题目 | A 打码前+旧 | B 打码后+旧 | C 打码后+新\n')
   for (const r of rows) process.stdout.write(line(r) + '\n')
@@ -180,5 +194,7 @@ if (isJson) {
     const ok = r.flagged === want
     process.stdout.write(`  ${ok ? '✓' : '✗'} ${r.q} → ${r.top || '（空）'} [${r.state}]${want ? '' : '（卡本身带否定，不该误报）'}\n`)
   }
+  process.stdout.write('\n数字问句（头名要对）：\n')
+  for (const r of numRows) process.stdout.write(`  ${r.ok ? '✓' : '✗'} ${r.q} → ${r.top || '（空）'}\n`)
   process.stdout.write('\n（[related]/[none] 是 C 判出的状态；A/B 没有状态，只有分数。「空」= 判成没有这块记忆）\n')
 }
