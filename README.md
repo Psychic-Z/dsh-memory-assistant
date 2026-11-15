@@ -16,7 +16,11 @@
 - **整库常驻上下文**：约 40 token/张卡（1000 张 ≈ 4 万/轮，1 万张 ≈ 40 万/轮），随库线性涨
 - **让模型自己翻目录**：实测 2.7 万 token/次
 
-**③ 找不到会问，不编**
+**③ 会记住你强调过什么**
+说「铁律」「P0」这类词的记忆，权重直接拉满；普通强调按 0.2 累加。
+权重写进关键词（`核心`/`重要`），所以它看得见、查得到——问「重要的原则」就能筛出来。
+
+**④ 找不到会问，不编**
 三态：**精确命中 / 无精确但有相关 / 没有**。判「精确」只看字面（标题/关键词/引用），不看分数。
 没有就说没有；前两名并列、或者问得太笼统，就反问你一句——而不是硬给一个像的。
 
@@ -98,7 +102,8 @@ dsh plugin --profile desktop add dsh-memory-assistant
 
 ```bash
 mem recall "公告板 怎么丢的" --top 3      # 检索（三态 + 候选）
-mem feedback --key w:0086 --verdict good  # 记一条满意度
+mem feedback --key w:0086 --verdict good  # 记一条满意度（会调权重）
+mem vocab-rate --owner <库主> --term <词> --verdict good  # 给别人的对照表打分（可选）
 mem stats                                 # 卡片数 / 查询数 / 需追问率 / 满意率
 mem import status                         # 导入进度
 mem concepts audit --tier B               # 关键词体检（只看不改）
@@ -115,7 +120,9 @@ node bin/mem-probe.mjs        # 6 道探针回放，对比三种配置的命中�
 ```
 
 - 数据：`~/.dsh-memory-assistant/{cards.jsonl, ask_log.jsonl, feedback.jsonl, concepts.json}`
-- 卡片字段：`key / title / one_line / outline[3] / keywords[3-6] / codes / entities / pointer{u,quote,project}`
+- 卡片字段：`key / title / one_line / outline[3] / keywords / terms / codes / entities / pointer{u,quote,project}`，
+  外加 `importance`（权重，0.x 刻度）、`pinned`、`body`（正文，供字面匹配）
+- 权重：`node tools/mark-importance.mjs` 按规则重算全库
 - 修改概念表一律走 `writeConcepts()`：先备份 `concepts.bak-vN.json`，版本 +1
 
 ## 测试环境（作者本机，2026-11-14）
