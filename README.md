@@ -119,6 +119,23 @@ node --check lib/*.js bin/*.js client.js
 node bin/mem-probe.mjs        # 6 道探针回放，对比三种配置的命中率
 ```
 
+### 发版前必须核对三处（2026-11-15 加，血泪教训）
+
+同一天连踩三个「代码改了、对外那一层没改」的坑，所以写成清单：
+
+| # | 核对什么 | 怎么核对 |
+|---|---|---|
+| 1 | `package.json` 的 `version` | 改成新版本号，**这是唯一的真值** |
+| 2 | 面板显示的版本 | 面板从 `/memory-assistant/api/version` 读（宿主读 `package.json`），**不要再写死在 `client.js`**；改完重启看一次 |
+| 3 | Release 说明 | 别用模板默认文案；`make-release.mjs` 不带 `--body` 时会沿用旧文案 |
+
+**另外两条硬规矩**：
+
+- **改完必须重启应用**：插件「禁用→启用」不会重新加载模块（ESM 缓存），看到的还是旧代码。
+  这条害我白试三轮热重载。
+- **`try/catch` 吞异常 = 看起来像在工作**：路由守卫第一版因为 `inject` 少一个服务直接抛错，
+  被 catch 掉后表现成「守卫放行」，查了很久。关键路径的 catch 里至少要 `logger.warn` 一次。
+
 - 数据：`~/.dsh-memory-assistant/{cards.jsonl, ask_log.jsonl, feedback.jsonl, concepts.json}`
 - 卡片字段：`key / title / one_line / outline[3] / keywords / terms / codes / entities / pointer{u,quote,project}`，
   外加 `importance`（权重，0.x 刻度）、`pinned`、`body`（正文，供字面匹配）
