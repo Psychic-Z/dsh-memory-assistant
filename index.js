@@ -28,7 +28,8 @@ export const name = 'memory-assistant'
  * - webServer：设置页那三个接口；不声明的话 apply 时 ctx.webServer 还是 undefined，
  *   路由被静默跳过 → 面板拿到 404 空包 → "Unexpected end of JSON input"
  */
-export const inject = ['skills', 'webServer']
+// connection 是硬依赖：Cordis 不允许访问未声明的服务（报 cannot get property ... without inject）
+export const inject = ['skills', 'webServer', 'connection']
 
 export function apply(ctx, config = {}) {
   // 自动抽卡要用宿主的 llm；没有就退化成「只提供面板不动手」，不挡住插件挂载。
@@ -64,14 +65,46 @@ export function apply(ctx, config = {}) {
     // 准入：把 DSH 的 Host/Origin + 浏览器鉴权检查搬到我们自己的路由入口
     const guard = (req) => {
       try {
-        const conn = ctx.get ? ctx.get('connection') : ctx.connection
-        if (!conn || typeof conn.requestRejection !== 'function') return undefined
-        return conn.requestRejection({ headers: req.headers })
+        // 探针：带这个头就必然拒，用来确认守卫真的被调用
+        if (req.headers && req.headers['x-guard-probe']) return 418
+        const conn = ctx.connection
+        if (!conn) return undefined
+        // ① Host / Origin 检查（DSH 自己路由同款）
+        if (typeof conn.requestRejection === 'function') {
+          const r = conn.requestRejection({ headers: req.headers })
+          if (r) return r
+        }
+        // 只做 Host / Origin 准入（维护者建议的那条）。
+        // 不加 admit()：面板自己的同源请求不带凭据会被挡成 401，把功能弄坏。
+        return undefined
       } catch (_) {
         return undefined
       }
     }
-    for (const route of makeRoutes({ importer, guard })) ctx.webServer.register(route)
+    const diagnose = (req) => {
+      try {
+        const conn = ctx.connection
+        const out = {
+          hasConnection: !!conn,
+          hasRejection: !!(conn && conn.requestRejection),
+          hasAdmit: !!(conn && conn.admit),
+          origin: (req.headers && req.headers.origin) || null,
+          host: (req.headers && req.headers.host) || null,
+          hasCookie: !!(req.headers && req.headers.cookie),
+          rejection: null,
+          admission: null,
+        }
+        if (conn && conn.requestRejection) out.rejection = conn.requestRejection({ headers: req.headers }) || null
+        if (conn && conn.admit) {
+          const a = conn.admit({ headers: req.headers })
+          out.admission = a && a.rejection ? a.rejection : 'peer'
+        }
+        return out
+      } catch (e) {
+        return { error: String((e && e.message) || e) }
+      }
+    }
+    for (const route of makeRoutes({ importer, guard, diagnose })) ctx.webServer.register(route)
   } catch (e) {
     try {
       ctx.logger?.warn?.(`[memory-assistant] 设置接口注册失败：${e && e.message ? e.message : e}`)
