@@ -78,10 +78,14 @@ const decay = (ts) => {
 
 // term -> {good, bad, w}
 const stats = new Map()
-const bump = (term, kind, w) => {
-  const s = stats.get(term) || { good: 0, bad: 0, w: 0 }
-  s[kind] += w
+// 共享层用细刻度：不同判决给不同权重，最后归一化到 0–1（三位小数）
+const VALUE = { good: 1.0, partial: 0.3, bad: -1.0, worst: -2.0 }
+const bump = (term, credit, w) => {
+  const s = stats.get(term) || { pos: 0, neg: 0, w: 0, n: 0 }
+  if (credit >= 0) s.pos += credit * w
+  else s.neg += -credit * w
   s.w += w
+  s.n += 1
   stats.set(term, s)
 }
 
@@ -101,11 +105,18 @@ if (existsSync(fbPath)) {
     if (!ask) continue // 复原不出那次检索用了哪些词 → 不记分（宁缺勿错）
     rows++
     const w = decay(r.ts)
-    const kind = (r.delta || 0) >= 0 ? 'good' : 'bad'
+    // 判决 → 分值：好 +1.0 / 部分对 +0.3 / 错 -1.0 / 全错 -2.0
+    const kind = !r.verdict || r.verdict === 'good'
+      ? 'good'
+      : r.verdict === 'partial'
+        ? 'partial'
+        : /(完全不对|彻底错|全错|一点都不对)/.test(r.note || '')
+          ? 'worst'
+          : 'bad'
     const q = typeof ask.q === 'string' ? ask.q : (ask.q && ask.q.text) || ''
     // 只给「出现在问句里 + 属于对照表」的词记分
     for (const t of tableTerms) {
-      if (q.includes(t)) bump(t, kind, w)
+      if (q.includes(t)) bump(t, VALUE[kind], w)
     }
   }
 }
@@ -113,16 +124,18 @@ if (existsSync(fbPath)) {
 const terms = {}
 let scored = 0
 for (const [t, s] of [...stats.entries()].sort((a, b) => b[1].w - a[1].w)) {
-  const n = s.good + s.bad
+  const n = s.n
   const ok = n >= MIN_SAMPLES
-  const raw = n ? (s.good - s.bad) / n : null
+  const raw = s.pos - s.neg                       // 净得分（可正可负）
+  const span = Math.max(1, s.pos + s.neg)         // 归一化分母
+  const norm = span ? raw / span : 0              // -1..1
   terms[t] = {
     code: termToCode.get(t) || null,
-    n: Number(n.toFixed(2)),
-    good: Number(s.good.toFixed(2)),
-    bad: Number(s.bad.toFixed(2)),
-    score: ok ? Number(((raw + 1) / 2).toFixed(3)) : null, // 0..1
-    note: ok ? '' : `样本不足（${n.toFixed(1)}/${MIN_SAMPLES}）`,
+    n,
+    net: Number(raw.toFixed(3)),
+    w: Number(s.w.toFixed(3)),
+    score: ok ? Number(((norm + 1) / 2).toFixed(3)) : null, // 0..1，三位小数
+    note: ok ? '' : `样本不足（${n}/${MIN_SAMPLES}）`,
   }
   if (ok) scored++
 }
