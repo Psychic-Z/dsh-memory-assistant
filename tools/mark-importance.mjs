@@ -20,20 +20,30 @@ const DIR = dirArg >= 0 ? args[dirArg + 1] : join(homedir(), '.dsh-memory-assist
 const DRY = args.includes('--dry')
 const CARDS = join(DIR, 'cards.jsonl')
 
-const STRONG = ['原则', '铁律', '纪律', '规矩', '必须', '不许', '不准', '只准', '永远', '一律', '禁止']
-const ECHO = ['我说过', '以前说过', '之前说过', '重申', '再次强调', '反复强调', '我讲过', '说过了']
+// 261115 主人：分级。极强词直接拉满；普通强调逐步加，不一下加满。
+const LEGEND = ['铁律', 'P0', 'p0', '一票否决', '绝对不能', '永远不许', '底线规则']
+const STRONG = ['原则', '纪律', '规矩', '记住', '以后都', '不准', '不许', '禁止', '必须', '只准']
+const MEDIUM = ['重要', '注意', '别忘了', '关键', '重点', '务必']
+const ECHO = ['我说过', '以前说过', '之前说过', '重申', '再次强调', '反复强调', '我讲过', '说过了', '又说一遍', '再强调']
+// 语气标记：感叹、绝对化副词——都是「这话他当回事」的信号
+const TONE = ['！', '!', '千万', '一定', '绝对', '务必', '真的']
 
 const textOf = (c) => [c.title, c.one_line, ...(c.outline || []), ...(c.keywords || [])].filter(Boolean).join(' ')
 
 // 261115 主人：5 分制太粗，按 0.x 增减。
 function score(c) {
   const t = textOf(c) + ' ' + (c.pointer?.quote || '')
+  // 特殊情况：铁律 / P0 这类词，直接给满，不按常规累加
+  if (LEGEND.some((w) => t.includes(w))) return 5
   let s = 1
-  let hits = 0
-  for (const w of STRONG) if (t.includes(w)) hits++
-  s += Math.min(0.6, hits * 0.2)                    // 每个强调词 +0.2，封顶 +0.6
-  if (ECHO.some((w) => t.includes(w))) s += 0.2     // 用户说过「我说过/以前说过」
-  return s
+  let strong = 0
+  for (const w of STRONG) if (t.includes(w)) strong++
+  let medium = 0
+  for (const w of MEDIUM) if (t.includes(w)) medium++
+  s += Math.min(0.8, strong * 0.2 + medium * 0.1)   // 强调：逐步加，封顶 +0.8
+  if (ECHO.some((w) => t.includes(w))) s += 0.2     // 「我说过 / 又说一遍」
+  if (TONE.some((w) => t.includes(w))) s += 0.1     // 语气：感叹、千万、一定
+  return Math.min(2.5, s)                           // 常规路径最多 2.5 —— 不一下加满
 }
 const round2 = (x) => Math.round(x * 100) / 100
 
