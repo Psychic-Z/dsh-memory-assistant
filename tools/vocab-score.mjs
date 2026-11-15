@@ -27,6 +27,7 @@ const arg = (k, d) => {
   return i >= 0 ? argv[i + 1] : d
 }
 const DIR = arg('--dir', join(homedir(), '.dsh-memory-assistant'))
+const AGG = arg('--agg', '')   // 互评模式：读 <agg>/词表评分/评价日志/*.jsonl
 const OUT = arg('--out', '')
 const BY = arg('--by', 'deepseek-harness')
 const HALF_LIFE_DAYS = 90
@@ -138,6 +139,64 @@ for (const [t, s] of [...stats.entries()].sort((a, b) => b[1].w - a[1].w)) {
     note: ok ? '' : `样本不足（${n}/${MIN_SAMPLES}）`,
   }
   if (ok) scored++
+}
+
+// ── 互评聚合模式（261115 主人：对照表由用它的智能体打分）──────────
+if (AGG) {
+  const { readdirSync, existsSync: ex } = await import('node:fs')
+  const { join: jn } = await import('node:path')
+  const logDir = jn(AGG, '词表评分', '评价日志')
+  const byOwner = new Map()   // owner -> term -> {pos,neg,n,raters:Set}
+  const rowsAll = []
+  if (ex(logDir)) {
+    for (const f of readdirSync(logDir).filter((x) => x.endsWith('.jsonl'))) {
+      for (const line of readFileSync(jn(logDir, f), 'utf8').split('\n')) {
+        if (!line.trim()) continue
+        let r
+        try { r = JSON.parse(line) } catch { continue }
+        rowsAll.push(r)
+        const owner = r.table_owner
+        if (!owner) continue
+        const w = Math.pow(0.5, Math.max(0, (Date.now() - Date.parse(r.ts)) / 86400000) / HALF_LIFE_DAYS)
+        const m = byOwner.get(owner) || new Map()
+        const t = m.get(r.term) || { pos: 0, neg: 0, n: 0, raters: new Set(), code: r.code || null }
+        const v = { good: 1.0, partial: 0.3, bad: -1.0, worst: -2.0 }[r.verdict] ?? 0
+        if (v >= 0) t.pos += v * w; else t.neg += -v * w
+        t.n += 1
+        t.raters.add(r.rater)
+        m.set(r.term, t)
+        byOwner.set(owner, m)
+      }
+    }
+  }
+  for (const [owner, m] of byOwner) {
+    const terms = {}
+    let scoredN = 0
+    for (const [term, t] of [...m.entries()].sort((a, b) => (b[1].pos + b[1].neg) - (a[1].pos + a[1].neg))) {
+      const ok = t.n >= MIN_SAMPLES
+      const span = Math.max(1, t.pos + t.neg)
+      const norm = (t.pos - t.neg) / span
+      terms[term] = {
+        code: t.code,
+        n: t.n,
+        net: Number((t.pos - t.neg).toFixed(3)),
+        raters: [...t.raters],
+        score: ok ? Number(((norm + 1) / 2).toFixed(3)) : null,
+        note: ok ? '' : `样本不足（${t.n}/${MIN_SAMPLES}）`,
+      }
+      if (ok) scoredN++
+    }
+    const o = {
+      by: owner, updated: new Date().toISOString(), source: 'agent-ratings',
+      half_life_days: HALF_LIFE_DAYS, min_samples: MIN_SAMPLES,
+      n_ratings: rowsAll.filter((r) => r.table_owner === owner).length,
+      n_terms: Object.keys(terms).length, n_terms_scored: scoredN, terms,
+    }
+    const outPath = jn(AGG, '词表评分', `${owner}.json`)
+    writeFileSync(outPath, JSON.stringify(o, null, 1), 'utf8')
+    console.log(`${owner}: 评 ${o.n_ratings} 条 / ${o.n_terms} 词 / 出分 ${scoredN} → ${outPath}`)
+  }
+  process.exit(0)
 }
 
 const out = {

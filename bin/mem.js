@@ -269,6 +269,32 @@ if (cmd === 'init') {
       }
     }
   }
+} else if (cmd === 'vocab-rate') {
+  // 261115 主人：共享层对照表的评分由「用它的智能体」打，不靠主人。
+  // 刻度 0.0x：一次判决只推动一点点，靠次数累积。
+  const { appendFileSync, mkdirSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const owner = flags.owner            // 被评的对照表属于谁
+  const term = flags.term
+  const verdict = flags.verdict
+  const shared = flags.dir || process.env.DSH_SHARED_DIR
+  if (!owner || !term || !['good', 'partial', 'bad', 'worst'].includes(verdict) || !shared) {
+    out('用法: mem vocab-rate --owner <库主> --term <词> [--code C001] --verdict good|partial|bad|worst --query "<原问句>" --dir <共享数据目录>')
+    process.exit(1)
+  }
+  const row = {
+    ts: new Date().toISOString(),
+    rater: flags.as || 'deepseek-harness',
+    table_owner: owner,
+    term,
+    code: flags.code || null,
+    verdict,
+    query: flags.query || '',
+  }
+  const dir = join(shared, '词表评分', '评价日志')
+  mkdirSync(dir, { recursive: true })
+  appendFileSync(join(dir, `${row.rater}.jsonl`), JSON.stringify(row) + '\n', 'utf8')
+  out(`已记：${row.rater} 评 ${owner} 的「${term}」= ${verdict}`)
 } else if (cmd === 'feedback') {
   const key = flags.key
   const verdict = flags.verdict
@@ -500,5 +526,5 @@ if (cmd === 'init') {
 } else if (cmd === 'list') {
   for (const c of loadCards(cfg).slice(0, Number(flags.n || 10))) out(`${c.key}  ${c.title}  ${c.one_line}`)
 } else {
-  out('命令: init | add | recall [--session <id>] | feedback | import | stats | list | sessions')
+  out('命令: init | add | recall [--session <id>] | feedback | vocab-rate | import | stats | list | sessions')
 }
