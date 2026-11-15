@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.3.1
+
+### 安全：HTTP 路由补 Host / Origin 准入
+
+- 面板的三个 HTTP 接口原来直接挂在 `webServer.register` 上，**DSH 对这类裸路由不做 Host / Origin 检查**
+- 现在每个接口入口先调 `ctx.connection.requestRejection({ headers })`，401/403 直接拒；没有该服务的老宿主自动跳过（不阻断加载）
+- 由市场维护者 fkysly 在合并 PR 时指出，感谢
+
+
 ## 0.3.0
 
 ### 新增：记忆权重

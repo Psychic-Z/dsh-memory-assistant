@@ -61,7 +61,17 @@ export function apply(ctx, config = {}) {
 
   // 设置页的数据接口 + 导入接口
   try {
-    for (const route of makeRoutes({ importer })) ctx.webServer.register(route)
+    // 准入：把 DSH 的 Host/Origin + 浏览器鉴权检查搬到我们自己的路由入口
+    const guard = (req) => {
+      try {
+        const conn = ctx.get ? ctx.get('connection') : ctx.connection
+        if (!conn || typeof conn.requestRejection !== 'function') return undefined
+        return conn.requestRejection({ headers: req.headers })
+      } catch (_) {
+        return undefined
+      }
+    }
+    for (const route of makeRoutes({ importer, guard })) ctx.webServer.register(route)
   } catch (e) {
     try {
       ctx.logger?.warn?.(`[memory-assistant] 设置接口注册失败：${e && e.message ? e.message : e}`)

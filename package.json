@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-memory-assistant",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "记忆助理：把对话整理成记忆卡片，用关键词检索定位；找不到或不确定时会追问，不编。",
