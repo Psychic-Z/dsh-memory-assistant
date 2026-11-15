@@ -29,6 +29,18 @@ export const name = 'memory-assistant'
  *   路由被静默跳过 → 面板拿到 404 空包 → "Unexpected end of JSON input"
  */
 // connection 是硬依赖：Cordis 不允许访问未声明的服务（报 cannot get property ... without inject）
+
+// 261115：面板版本号从 package.json 读，避免写死在客户端里跟不上发版
+function readPluginVersion() {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
+    return String(pkg.version || '')
+  } catch (_) {
+    return ''
+  }
+}
+
 export const inject = ['skills', 'webServer', 'connection']
 
 export function apply(ctx, config = {}) {
@@ -104,7 +116,7 @@ export function apply(ctx, config = {}) {
         return { error: String((e && e.message) || e) }
       }
     }
-    for (const route of makeRoutes({ importer, guard, diagnose })) ctx.webServer.register(route)
+    for (const route of makeRoutes({ importer, guard, diagnose, version: readPluginVersion() })) ctx.webServer.register(route)
   } catch (e) {
     try {
       ctx.logger?.warn?.(`[memory-assistant] 设置接口注册失败：${e && e.message ? e.message : e}`)
