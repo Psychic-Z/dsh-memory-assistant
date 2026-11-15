@@ -289,7 +289,20 @@ if (cmd === 'init') {
           : /(不是这个|不对|错了|不是我要的)/.test(note)
             ? -0.3
             : -0.2
-  const fbRow = { ts: now(), key, verdict, note, delta }
+  // 把「那一次检索问了什么、用了哪些词」一起记下来 —— 评分才有归因依据
+  let qText = ''
+  let qTerms = []
+  let qState = ''
+  try {
+    const recent = readAsks(cfg)
+    const last = recent[recent.length - 1]
+    if (last) {
+      qText = typeof last.q === 'string' ? last.q : (last.q && last.q.text) || ''
+      qState = last.state || ''
+      qTerms = (last.top || []).map((t) => t.key).includes(key) ? last.termsKnown || [] : []
+    }
+  } catch {}
+  const fbRow = { ts: now(), key, verdict, note, delta, query: qText, terms_known: qTerms, state: qState }
   const ok = await persistLog('feedback', logFeedback(cfg, fbRow), fbRow)
   if (ok) out(`已记录：${verdict}（权重 ${delta > 0 ? '+' : ''}${delta}）`)
   else {
