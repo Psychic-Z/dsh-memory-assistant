@@ -37,12 +37,26 @@ function score(c) {
   return Math.min(5, s)
 }
 
+// 检索命中次数（261115）：被反复检索到的卡 = 真的有人需要它 → 自动提权。
+const hits = new Map()
+const askPath = join(DIR, 'ask_log.jsonl')
+if (existsSync(askPath)) {
+  for (const line of readFileSync(askPath, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      for (const t of JSON.parse(line).top || []) hits.set(t.key, (hits.get(t.key) || 0) + 1)
+    } catch {}
+  }
+}
 const cards = readFileSync(CARDS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
 const dist = {}
 for (const c of cards) {
   // pinned 卡（用户明示「记住这条」）保底 5，不被自动打分压低
-  if (c.pinned) { c.importance = 5; }
-  else c.importance = score(c)
+  const h = hits.get(c.key) || 0
+  const bonus = h >= 8 ? 2 : h >= 3 ? 1 : 0      // 反复被检索到 → 提权
+  if (c.pinned) c.importance = 5
+  else c.importance = Math.min(5, score(c) + bonus)
+  c.hits = h
   dist[c.importance] = (dist[c.importance] || 0) + 1
 }
 console.log('重要度分布：', JSON.stringify(dist))
