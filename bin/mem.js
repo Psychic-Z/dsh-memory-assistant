@@ -273,9 +273,25 @@ if (cmd === 'init') {
   const key = flags.key
   const verdict = flags.verdict
   if (!key || !['good', 'partial', 'bad'].includes(verdict)) { out('用法: mem feedback --key w:001 --verdict good|partial|bad [--note 说明]'); process.exit(1) }
-  const fbRow = { ts: now(), key, verdict, note: flags.note || '' }
+  // 261115 主人：加分最多 +0.1；减分按语气分级——
+  //   肯定       → +0.1
+  //   「不完全/不光因为这个」→ -0.05
+  //   「不是这个/不对」      → -0.3（「完全不对/彻底错」→ -1.0）
+  //   +「以后别再用这张」  → 额外 -0.2
+  const note = String(flags.note || '')
+  const delta =
+    verdict === 'good'
+      ? 0.1
+      : verdict === 'partial'
+        ? (/(不完全|不光|不全是|部分对|还有别的)/.test(note) ? -0.05 : -0.1)
+        : /(完全不对|彻底错|全错|一点都不对)/.test(note)
+          ? -1.0
+          : /(不是这个|不对|错了|不是我要的)/.test(note)
+            ? -0.3
+            : -0.2
+  const fbRow = { ts: now(), key, verdict, note, delta }
   const ok = await persistLog('feedback', logFeedback(cfg, fbRow), fbRow)
-  if (ok) out('已记录：' + verdict)
+  if (ok) out(`已记录：${verdict}（权重 ${delta > 0 ? '+' : ''}${delta}）`)
   else {
     const e = lastLogErrorInfo()
     out(`反馈没记进去（${e ? e.message.slice(0, 80) : '数据目录不可写'}）。检索结果不受影响，但满意度会缺这一条`)

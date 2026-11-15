@@ -58,16 +58,31 @@ if (existsSync(askPath)) {
     } catch {}
   }
 }
+// 用户反馈（261115）：肯定 +0.1 / 「不完全」-0.05 / 「不是这个」-0.3（更重的 -1.0）
+const fbDelta = new Map()
+const fbPath = join(DIR, 'feedback.jsonl')
+if (existsSync(fbPath)) {
+  for (const line of readFileSync(fbPath, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      const r = JSON.parse(line)
+      if (r.key && typeof r.delta === 'number') fbDelta.set(r.key, (fbDelta.get(r.key) || 0) + r.delta)
+    } catch {}
+  }
+}
+
 const cards = readFileSync(CARDS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
 const dist = {}
 for (const c of cards) {
   // pinned 卡（用户明示「记住这条」）保底 5，不被自动打分压低
   const h = hits.get(c.key) || 0
   const bonus = Math.min(0.5, h * 0.05)          // 每次被检索 +0.05，封顶 +0.5
-  let imp = score(c) + bonus
+  const fb = Math.max(-1.5, Math.min(1.5, fbDelta.get(c.key) || 0))   // 反馈累计，封顶 ±1.5
+  let imp = score(c) + bonus + fb
   if (c.pinned) imp = Math.max(imp, 3.5)         // pinned 保底 3.5（进「核心」档）
   c.importance = round2(Math.min(5, Math.max(1, imp)))
   c.hits = h
+  c.feedback_delta = round2(fb)
   // 261115 主人：把权重记进关键词——这样它能被「筛选」用到，也能被人一眼看见。
   // 档位：≥4.0 → 核心；≥3.0 → 重要；其余不带标记
   const kws = (c.keywords || []).filter((k) => k !== '核心' && k !== '重要')
