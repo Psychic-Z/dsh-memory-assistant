@@ -135,6 +135,20 @@ node bin/mem-probe.mjs        # 6 道探针回放，对比三种配置的命中�
   这条害我白试三轮热重载。
 - **`try/catch` 吞异常 = 看起来像在工作**：路由守卫第一版因为 `inject` 少一个服务直接抛错，
   被 catch 掉后表现成「守卫放行」，查了很久。关键路径的 catch 里至少要 `logger.warn` 一次。
+- **LLM 调用出错必须带 `failure.code`（2026-11-18 加）**：
+  DSH 的 `finish` 有两种失败——`kind:'error'` 与 `kind:'aborted'`，**两种都带 `failure`**。
+  只读 `error` 会把 `aborted` 的真实原因（限流/超时/配额）扔掉，界面上只剩 `finish=aborted`，
+  那不是原因、是症状。写法：
+
+  ```js
+  if (chunk.reason && (chunk.reason.kind === 'error' || chunk.reason.kind === 'aborted')) {
+    failure = chunk.reason.failure            // 两个都要读
+  }
+  …
+  throw new Error(`模型调用失败 [${failure.code}]：${failure.message}`)
+  ```
+
+  同类错误一律进 `failures.jsonl`（`lib/fail.js` 的 `noteFailure`），让 `mem stats` 看得见。
 
 - 数据：`~/.dsh-memory-assistant/{cards.jsonl, ask_log.jsonl, feedback.jsonl, concepts.json}`
 - 卡片字段：`key / title / one_line / outline[3] / keywords / terms / codes / entities / pointer{u,quote,project}`，
