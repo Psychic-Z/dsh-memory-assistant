@@ -220,6 +220,8 @@ if (cmd === 'init') {
   // 2026-11-17：**领域包也参与检索**，但和卡片分开展示——
   // 卡片答的是「发生过什么」，领域包答的是「这个领域里定义/规则/状态是什么」。
   // 以前只查卡片，问「写成绩要注明什么」时领域包里的那条状态是查不到的。
+  // 2026-11-17：专业库默认优先。--memory-first 可临时切回；--domain-first 强制。
+  const domainFirst = flags['memory-first'] ? false : (flags['domain-first'] ? true : prefs.domainFirst !== false)
   const domainHits = (() => {
     try {
       const dir = String(prefs.domainDir || '') || (dataDir(cfg) + '/domains')
@@ -326,8 +328,22 @@ if (cmd === 'init') {
       })),
     })
   } else {
+      const printDomain = () => {
+        if (!domainHits.length) return
+        out('')
+        for (const d of domainHits) {
+          out(`【领域】${d.domain}（该领域 ${d.n_cards} 张卡）`)
+          for (const st0 of d.states || []) out(`   · ${st0.text}${st0.as_of ? `（as_of ${st0.as_of}）` : ''}${st0.status === 'draft' ? ' ⚠草稿' : ''}`)
+          for (const r of d.rules || []) out(`   · 规则：${r.text || r}${r.from ? `（${r.from}）` : ''}`)
+        }
+      }
     const brief = (list) => list.slice(0, 4).join(' / ')
     const scopeWord = flags.session && flags.session !== true ? '这场对话里' : '库里'
+      if (domainFirst && domainHits.length) {
+        printDomain()
+        out('')
+        out('（以上是领域里的规则与状态；下面是长期记忆里发生过的事）')
+      }
     if (state === 'exact') {
       out(`【精确命中】${scopeWord}讲到「${brief(st.known)}」的卡有 ${scored.length} 张（覆盖 ${(st.coverage * 100).toFixed(0)}%）`)
     } else if (state === 'related') {
@@ -357,18 +373,21 @@ if (cmd === 'init') {
         if (s.card.pointer?.path) out(`   → ${s.card.pointer.path}${s.card.pointer.heading ? ' / ' + s.card.pointer.heading : ''}`)
         else if (s.card.pointer?.u) out(`   → 段号 ${s.card.pointer.u}（按它回原文取那一段）`)
       }
-      // 2026-11-17：领域包也参与回答——它答的是「这个领域里定义/规则/状态」，
-      // 和「发生过什么」的卡片分开列，免得两种东西混成一个答案。
-      if (domainHits.length) {
-        out('')
-        for (const d of domainHits) {
-          out(`【领域】${d.domain}（该领域 ${d.n_cards} 张卡）`)
-          for (const st0 of d.states || []) out(`   · ${st0.text}${st0.as_of ? `（as_of ${st0.as_of}）` : ''}${st0.status === 'draft' ? ' ⚠草稿' : ''}`)
-          for (const r of d.rules || []) out(`   · 规则：${r.text || r}${r.from ? `（${r.from}）` : ''}`)
-        }
-      }
+      if (!domainFirst) printDomain()
     }
   }
+} else if (cmd === 'prefs') {
+  // 2026-11-17 主人：专业库（领域）默认优先于长期记忆，但可由用户切回。
+  const { writeConfig } = await import('../lib/server-routes.js')
+  const val = pos[0]
+  if (!val || !['domain', 'memory'].includes(val)) {
+    const cur = prefs.domainFirst === false ? 'memory' : 'domain'
+    out(`当前：${cur === 'domain' ? '专业库优先（默认）' : '长期记忆优先'}`)
+    out('用法: mem prefs domain|memory')
+    process.exit(val ? 1 : 0)
+  }
+  const next = writeConfig({ domainFirst: val === 'domain' })
+  out(`已设置：${next.domainFirst ? '专业库优先（涉及相关专业时先用领域规则/状态）' : '长期记忆优先（先给发生过的事）'}`)
 } else if (cmd === 'vocab-rate') {
   // 261115 主人：共享层对照表的评分由「用它的智能体」打，不靠主人。
   // 刻度 0.0x：一次判决只推动一点点，靠次数累积。
