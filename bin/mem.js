@@ -169,6 +169,19 @@ if (cmd === 'init') {
   let conceptTable = {}
   try { conceptTable = JSON.parse(readFileSync(dataDir(cfg) + '/concepts.json', 'utf8')) } catch {}
   const autoConcepts = mapConcepts(text, conceptTable, { isGeneric: makeAliasGate(cards0, prefs) })
+  // 2026-11-17 接线（会话手记 §10「三套没接线」）：
+  //   ① 概念表的词要能进检索词表，否则问句里那个词切不出来 → 直接 none
+  //   ② 别名 → 概念码 的映射要传给判态，让「卡带该码」也算讲到了
+  const aliasToId = {}
+  const conceptWords = new Set()
+  for (const [id, v] of Object.entries(conceptTable || {})) {
+    for (const w of [v.name, ...(v.aliases || [])]) {
+      const t2 = String(w || '').trim()
+      if (t2.length < 2 || t2.length > 12) continue
+      if (!aliasToId[t2]) aliasToId[t2] = id
+      conceptWords.add(t2)
+    }
+  }
   let entityList = []
   try { entityList = JSON.parse(readFileSync(dataDir(cfg) + '/entities.json', 'utf8')) } catch {}
   const autoEntities = entityList.filter((e) => e && String(e).length >= 2 && text.includes(String(e)))
@@ -181,7 +194,7 @@ if (cmd === 'init') {
   // idf 与词表用全库算，覆盖只看本次检索范围（--session / 项目筛选时不至于把词表缩没）
   const stats = textStats(cards0)
   // 三态：精确命中 / 无精确但有相关 / 都没有。判「精确」只看字面（标题/关键词/引用），不看分数。
-  const st = literalState(cards, q, { stats, vocabCards: cards0 })
+  const st = literalState(cards, q, { stats, vocabCards: cards0, aliasToId, vocabExtra: conceptWords })
   // 绝对地板：码会把相关卡的分抬得很高，没有地板就会「自信地答错」
   // 有码时分数普遍被抬高（判 6），没码时走字面分（判 2.5），否则新装的库会永远空手
   const hasCodes = cards.some((c) => c.codes && Array.isArray(c.codes.concept) && c.codes.concept.length)
