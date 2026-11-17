@@ -48,6 +48,10 @@ let wrote = 0
 for (const [domain, box] of byDomain) {
   if (ONLY && domain !== ONLY) continue
   const mine = cards.filter((c) => c.domain === domain)
+  let prevSlots = null
+  try {
+    prevSlots = JSON.parse(readFileSync(join(OUT, `${domain}.json`), 'utf8')).slots || null
+  } catch {}
   const pack = {
     domain,
     updated: new Date().toISOString().slice(0, 10),
@@ -55,11 +59,10 @@ for (const [domain, box] of byDomain) {
     codes: box.codes.sort(),
     terms: [...box.terms].sort(),
     // 规则 / 状态 / 摘要：三个空槽，等填。**不自动生成**——编出来的领域知识比没有更糟。
-    slots: {
-      rules: [],
-      states: [],
-      summaries: [],
-    },
+    // 重生成时保留已填的 slots（人工/裁定内容不能被冲掉）
+    slots: prevSlots && (prevSlots.rules?.length || prevSlots.states?.length)
+      ? prevSlots
+      : { rules: [], states: [], summaries: [] },
     entries: mine
       .slice()
       .sort((a, b) => (b.importance || 1) - (a.importance || 1))

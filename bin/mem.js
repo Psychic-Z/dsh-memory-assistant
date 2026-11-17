@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 记忆助理 CLI：init / recall / feedback / stats / list
-import { readFileSync, copyFileSync } from 'node:fs'
+import { readFileSync, copyFileSync, readdirSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -217,6 +217,53 @@ if (cmd === 'init') {
   const allScored = scoreCards(cards, q, { stats })
   const covOf = (s) => (st.covByKey.get(s.card.key) || {}).coverage || 0
   // 只给码、没有问句（mem recall --concepts C01）：没有字面可判，退回纯分数
+  // 2026-11-17：**领域包也参与检索**，但和卡片分开展示——
+  // 卡片答的是「发生过什么」，领域包答的是「这个领域里定义/规则/状态是什么」。
+  // 以前只查卡片，问「写成绩要注明什么」时领域包里的那条状态是查不到的。
+  const domainHits = (() => {
+    try {
+      const dir = String(prefs.domainDir || '') || (dataDir(cfg) + '/domains')
+      if (!existsSync(dir)) return []
+      // 用「问句二元组 ∩ 领域包文本」来判，不依赖库词表——
+      // 否则词表里缺词（或含跨边界碎片）时，领域包会被连带漏掉。
+      const qb = new Set()
+      for (const seg of String(text).split(/[^\u4e00-\u9fa5a-zA-Z0-9]+/)) {
+        for (let i = 0; i + 2 <= seg.length; i++) qb.add(seg.slice(i, i + 2).toLowerCase())
+      }
+      const hits = []
+      for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+        let pack
+        try { pack = JSON.parse(readFileSync(dir + '/' + f, 'utf8')) } catch { continue }
+        const terms = Array.isArray(pack.terms) ? pack.terms : []
+        const slots = pack.slots || {}
+        const slotText = (row) => (typeof row === 'string' ? row : (row && row.text) || '')
+        const allSlots = [...(slots.rules || []), ...(slots.states || [])]
+        const prop = `${terms.join(' ')} ${allSlots.map(slotText).join(' ')}`.toLowerCase()
+        const common = [...qb].filter((g) => prop.includes(g))
+        const rulesHit = (slots.rules || []).filter((r) => {
+          const t = slotText(r).toLowerCase()
+          return [...qb].filter((g) => t.includes(g)).length >= 2   // 至少两个字对上
+        }).slice(0, 3)
+        const statesHit = (slots.states || []).filter((r) => {
+          const t = slotText(r).toLowerCase()
+          return [...qb].filter((g) => t.includes(g)).length >= 2
+        }).slice(0, 3)
+        // 只凭一两个字对上不算——要么命中规则/状态，要么至少三个字对上
+        if (!rulesHit.length && !statesHit.length && common.length < 3) continue
+        hits.push({
+          domain: pack.domain,
+          n_cards: pack.n_cards,
+          hits: common.length,
+          rules: rulesHit,
+          states: statesHit,
+        })
+      }
+      return hits.sort((a, b) => (b.rules.length + b.states.length) - (a.rules.length + a.states.length) || b.hits - a.hits).slice(0, 2)
+    } catch (_) {
+      return []
+    }
+  })()
+
   const codeOnly = !String(text || '').trim() && q.concepts.length > 0
   // 挑卡：exact 按字面覆盖排，related 按分数排并过地板；规则在 retrieve.rankByState
   const scored = codeOnly
@@ -266,6 +313,7 @@ if (cmd === 'init') {
         note: st.qNeg ? '问句是否定，但库里只有肯定记录；别把命中当「没发生过」' : '',
       },
       exclusion: st.exclusion || [],
+      domain_hits: domainHits,
       results: scored.map((s) => ({
         key: s.card.key,
         score: s.score,
@@ -308,6 +356,16 @@ if (cmd === 'init') {
         // 回原文要的地址：有文件路径就给路径，没路径就给段号（导出里按 u 取原文）
         if (s.card.pointer?.path) out(`   → ${s.card.pointer.path}${s.card.pointer.heading ? ' / ' + s.card.pointer.heading : ''}`)
         else if (s.card.pointer?.u) out(`   → 段号 ${s.card.pointer.u}（按它回原文取那一段）`)
+      }
+      // 2026-11-17：领域包也参与回答——它答的是「这个领域里定义/规则/状态」，
+      // 和「发生过什么」的卡片分开列，免得两种东西混成一个答案。
+      if (domainHits.length) {
+        out('')
+        for (const d of domainHits) {
+          out(`【领域】${d.domain}（该领域 ${d.n_cards} 张卡）`)
+          for (const st0 of d.states || []) out(`   · ${st0.text}${st0.as_of ? `（as_of ${st0.as_of}）` : ''}${st0.status === 'draft' ? ' ⚠草稿' : ''}`)
+          for (const r of d.rules || []) out(`   · 规则：${r.text || r}${r.from ? `（${r.from}）` : ''}`)
+        }
       }
     }
   }
