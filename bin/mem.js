@@ -194,6 +194,21 @@ if (cmd === 'init') {
   // idf 与词表用全库算，覆盖只看本次检索范围（--session / 项目筛选时不至于把词表缩没）
   const stats = textStats(cards0)
   // 三态：精确命中 / 无精确但有相关 / 都没有。判「精确」只看字面（标题/关键词/引用），不看分数。
+  // 2026-11-17：领域过滤（领域库是「另一条轴」）。--domain 投资交易 时只在该领域的卡里查。
+  if (flags.domain) {
+    const want = String(flags.domain)
+    const before = cards.length
+    cards = cards.filter((c) => {
+      const d = c.domain || ''
+      return d === want || d.includes(want) || want.includes(d)
+    })
+    if (!cards.length) {
+      if (!flags.json) out(`领域「${want}」里没有卡（全库 ${before} 张）。领域分布见：node tools/derive-domain.mjs --dry`)
+      process.exitCode = 2
+    } else if (!flags.json) {
+      out(`（领域过滤：${want} → ${cards.length} / ${before} 张）`)
+    }
+  }
   const st = literalState(cards, q, { stats, vocabCards: cards0, aliasToId, vocabExtra: conceptWords })
   // 绝对地板：码会把相关卡的分抬得很高，没有地板就会「自信地答错」
   // 有码时分数普遍被抬高（判 6），没码时走字面分（判 2.5），否则新装的库会永远空手
