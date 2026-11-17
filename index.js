@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { makeRoutes } from './lib/server-routes.js'
+import { noteFailure } from './lib/fail.js'
 import { readConfig } from './lib/server-routes.js'
 import { createImporter } from './lib/import-runner.js'
 import { createHintEngine } from './lib/hint.js'
@@ -89,7 +90,10 @@ export function apply(ctx, config = {}) {
         // 只做 Host / Origin 准入（维护者建议的那条）。
         // 不加 admit()：面板自己的同源请求不带凭据会被挡成 401，把功能弄坏。
         return undefined
-      } catch (_) {
+      } catch (e) {
+        // 2026-11-17：这里以前是 `catch (_) {}` —— 守卫抛错被吞，表现成「在放行」，
+        // 查了三轮才找到。现在失败必须留痕。
+        try { noteFailure(config, 'index.js:route-guard', e) } catch (_) {}
         return undefined
       }
     }

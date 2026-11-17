@@ -75,7 +75,14 @@ if (existsSync(fbPath)) {
 const cards = readFileSync(CARDS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
 const dist = {}
 for (const c of cards) {
-  // pinned 卡（用户明示「记住这条」）保底 5，不被自动打分压低
+  // 2026-11-17：pinned 卡**整张不动** —— 重要度、关键词、反馈累计都不碰。
+  // 借鉴 memfuse：用户明示过的记忆永不被自动改写（只补统计字段）。
+  if (c.pinned) {
+    c.importance = c.importance || 5
+    if (c.hits == null) c.hits = 0
+    dist['pinned'] = (dist['pinned'] || 0) + 1
+    continue
+  }
   const h = hits.get(c.key) || 0
   const bonus = Math.min(0.5, h * 0.05)          // 每次被检索 +0.05，封顶 +0.5
   const fb = Math.max(-1.5, Math.min(1.5, fbDelta.get(c.key) || 0))   // 反馈累计，封顶 ±1.5

@@ -7,6 +7,7 @@ import path from 'node:path'
 import { loadCards, saveCards, appendCard, logAsk, logFeedback, readFeedback, readAsks, dataDir, logUsage, readUsage, lastLogErrorInfo, logViaHost } from '../lib/store.js'
 import { scoreCards, gapRatio, mapConcepts, literalState, textStats, rankByState } from '../lib/retrieve.js'
 import { readConfig } from '../lib/server-routes.js'
+import { noteFailure, readFailures } from '../lib/fail.js'
 import { writeFileSync } from 'node:fs'
 
 const argv = process.argv.slice(2)
@@ -123,8 +124,21 @@ if (cmd === 'init') {
 } else if (cmd === 'add') {
   const c = JSON.parse(flags.json || '{}')
   if (!c.title) { out('用法: mem add --json \'{"title":"...","one_line":"...","outline":["","",""]}\''); process.exit(1) }
-  appendCard(cfg, { key: c.key || `n:${Date.now()}`, outline: c.outline || [], codes: c.codes || {}, pointer: c.pointer || {}, status: 'active', ...c })
-  out('ok')
+  let wrote = false
+  try {
+    appendCard(cfg, { key: c.key || `n:${Date.now()}`, outline: c.outline || [], codes: c.codes || {}, pointer: c.pointer || {}, status: 'active', ...c })
+    wrote = true
+  } catch (e) {
+    if (e && e.code === 'CREDENTIAL_BLOCKED') {
+      noteFailure(cfg, 'bin/mem.js:add', e, { hits: (e.hits || []).join(',') })
+      out(`没写：这张卡里疑似含${(e.hits || []).join('、')}。记忆会被检索、进上下文、进日志，所以凭据一律不入库。`)
+      process.exitCode = 2
+    } else {
+      noteFailure(cfg, 'bin/mem.js:add', e)
+      throw e
+    }
+  }
+  if (wrote) out('ok')
 } else if (cmd === 'recall') {
   const text = pos.join(' ')
   if (!text && !flags.concepts) { out('用法: mem recall "问题" [--concepts C01,C02] [--entities 公告板] [--top 3]'); process.exit(1) }
@@ -492,6 +506,28 @@ if (cmd === 'init') {
     saved_vs_browse: rows.length * browse - actual,
     note: '基线：library=把整库卡片常驻上下文；browse=让模型翻目录挑（实测 26,885/次）',
   })
+} else if (cmd === 'stale') {
+  // 2026-11-17：遗忘 = 标记过时，不是删除（借鉴 memfuse）。
+  // 过时的卡仍可被检索，但不再冒充「精确命中」。
+  const key = flags.key
+  if (!key) { out('用法: mem stale --key <卡号> [--undo]'); process.exit(1) }
+  const cards = loadCards(cfg)
+  const c = cards.find((x) => x.key === key)
+  if (!c) {
+    out('库里没有这张卡：' + key)
+    process.exitCode = 2
+  } else {
+  if (flags.undo) {
+    delete c.stale
+    delete c.stale_since
+    out(`已恢复：${c.title || key}`)
+  } else {
+    c.stale = true
+    c.stale_since = now()
+    out(`已标记过时：${c.title || key}（条目保留，仍可检索，但不再算精确命中）`)
+  }
+  saveCards(cfg, cards)
+  }
 } else if (cmd === 'stats') {
   const fb = readFeedback(cfg)
   const asks = readAsks(cfg)
@@ -523,6 +559,19 @@ if (cmd === 'init') {
     satisfaction: satisfaction === null ? null : Number(satisfaction.toFixed(3)),
     note: 'need_confirm = (related + none) / 有 state 的查询；精确命中可直接答，related 要先说明缺什么',
   })
+
+  // 2026-11-17：失败与过时都要看得见——看不见的故障会静默很久。
+  // 只在人读模式下打，避免污染 --json 输出。
+  if (!flags.json) try {
+    const all = loadCards(cfg)
+    const staleN = all.filter((c) => c.stale).length
+    if (staleN) out(`过时（still 可检索，不算精确命中）：${staleN} 张`)
+    const fails = readFailures(cfg, 3)
+    if (fails.length) {
+      out(`最近失败 ${fails.length} 条（完整见 failures.jsonl）：`)
+      for (const f of fails) out(`  · ${String(f.ts).slice(5, 16)} ${f.where} — ${String(f.message).slice(0, 60)}`)
+    }
+  } catch (_) {}
 } else if (cmd === 'list') {
   for (const c of loadCards(cfg).slice(0, Number(flags.n || 10))) out(`${c.key}  ${c.title}  ${c.one_line}`)
 } else {
