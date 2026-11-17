@@ -298,6 +298,23 @@ window.__ModuleLoader__.load({
         );
       };
 
+      // 布尔开关用（domainFirst 这类）：值是 true/false，不是字符串
+      const booleanRadio = (name, value, label) => {
+        const raw = cfg ? cfg[name] : undefined
+        const current = raw === undefined ? name === "domainFirst" : raw === true
+        return el(
+          "label",
+          { className: "ma-radio" },
+          el("input", {
+            type: "radio",
+            name,
+            checked: current === value,
+            onChange: () => setCfg(Object.assign({}, cfg || {}, { [name]: value })),
+          }),
+          label,
+        )
+      }
+
       const el = react.createElement;
       const btn = (kind, extra) =>
         "ma-btn" + (kind === "primary" ? " ma-btn--primary" : kind === "ghost" ? " ma-btn--ghost" : "") + (extra ? " " + extra : "");
@@ -567,6 +584,22 @@ window.__ModuleLoader__.load({
               radio("workspace", "all", "全部项目"),
               ...(((tool && tool.all && tool.all.workspaces) || []).map((w) => radio("workspace", w.project, w.project))),
             ),
+          ),
+          el(
+            "div",
+            { className: "ma-row" },
+            el("span", { className: "ma-label" }, "优先来源"),
+            el(
+              "div",
+              { className: "ma-radios" },
+              booleanRadio("domainFirst", true, "专业库优先（默认）"),
+              booleanRadio("domainFirst", false, "长期记忆优先"),
+            ),
+          ),
+          el(
+            "div",
+            { className: "ma-hint", style: { marginLeft: "92px", marginTop: "-2px" } },
+            "专业库优先：涉及相关专业时，先给该领域的规则与状态，再给发生过的事。",
           ),
           el(
             "div",
