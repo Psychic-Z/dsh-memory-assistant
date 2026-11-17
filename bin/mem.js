@@ -224,7 +224,16 @@ if (cmd === 'init') {
   const domainFirst = flags['memory-first'] ? false : (flags['domain-first'] ? true : prefs.domainFirst !== false)
   const domainHits = (() => {
     try {
-      const dir = String(prefs.domainDir || '') || (dataDir(cfg) + '/domains')
+      // 2026-11-18：本地归本地，共享归共享。
+      // 查本地库 → 读本地领域包；查共享索引（--dir）→ 读共享层的 领域/。
+      let dir = String(prefs.domainDir || '') || (dataDir(cfg) + '/domains')
+      if (flags.dir) {
+        // 索引在 共享/数据/记忆索引，领域包在 共享/领域 —— 往上找两层也试一次
+        for (const up of ['..', '../..', '../../..']) {
+          const cand = path.resolve(String(flags.dir), up, '领域')
+          if (existsSync(cand)) { dir = cand; break }
+        }
+      }
       if (!existsSync(dir)) return []
       // 用「问句二元组 ∩ 领域包文本」来判，不依赖库词表——
       // 否则词表里缺词（或含跨边界碎片）时，领域包会被连带漏掉。
