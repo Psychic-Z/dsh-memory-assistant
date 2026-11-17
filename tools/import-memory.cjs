@@ -218,6 +218,9 @@ if (cmd === 'merge') {
           one_line: c.one_line,
           outline: c.outline,
           keywords: c.keywords,
+          // 2026-11-18：topics（主题词）必须在这里带上——
+          // 这个对象是**白名单**，没列出来的字段会被丢掉（模型给了 topics 也留不下）。
+          topics: Array.isArray(c.topics) && c.topics.length ? c.topics : undefined,
           kw_short: c.kw_short === true || c.keywords.length < 3 || undefined,
           low_signal: c.low_signal === true || undefined,
           outline_trimmed: c.outline_trimmed || undefined,
